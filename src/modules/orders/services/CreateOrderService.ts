@@ -20,8 +20,11 @@ interface IRequest {
 @injectable()
 class CreateOrderService {
   constructor(
+    @inject('OrdersRepository')
     private ordersRepository: IOrdersRepository,
+    @inject('ProductsRepository')
     private productsRepository: IProductsRepository,
+    @inject('CustomersRepository')
     private customersRepository: ICustomersRepository,
   ) {}
 
@@ -32,17 +35,73 @@ class CreateOrderService {
       throw new AppError('Customer not found');
     }
 
-    const products2 = await this.productsRepository.findAllById(
-      products.map(product => ({ id: product.id })),
+    const findProducts = await this.productsRepository.findAllById(products);
+
+    if (!findProducts.length) {
+      throw new AppError('Could not find any products');
+    }
+
+    const productsRelations = products.map(product => {
+      const productFound = findProducts.filter(
+        findProduct => findProduct.id === product.id,
+      )[0];
+
+      return { product, productFound };
+    });
+
+    const productsNotFound = productsRelations.filter(
+      productRelation => !productRelation.productFound,
     );
 
-    await this.productsRepository.
+    if (productsNotFound.length) {
+      throw new AppError(
+        `Could not find product ${productsNotFound[0].product.id}`,
+      );
+    }
 
-    await this.ordersRepository.create({
+    const productsOverQuantityLimit = productsRelations
+      .filter(productRelation => !!productRelation.productFound)
+      .filter(productRelation => {
+        if (!productRelation.productFound) {
+          return false;
+        }
+        return (
+          productRelation.product.quantity >
+          productRelation.productFound.quantity
+        );
+      });
+
+    if (productsOverQuantityLimit.length) {
+      throw new AppError(
+        `Quantity ${productsOverQuantityLimit[0].product.quantity} is over ${productsOverQuantityLimit[0].productFound?.quantity} available`,
+      );
+    }
+
+    const order = await this.ordersRepository.create({
       customer,
-      products,
+      products: productsRelations.map(productRelation => ({
+        product_id: productRelation.productFound?.id,
+        quantity: productRelation.product?.quantity,
+        price: productRelation.productFound?.price,
+      })),
     });
-    // TODO
+
+    const { order_products } = order;
+
+    const orderedProductsQuantity = order_products.map(orderProduct => {
+      const foundProduct = findProducts.filter(
+        findProduct => findProduct.id === orderProduct.product_id,
+      )[0];
+
+      return {
+        id: orderProduct.product_id,
+        quantity: foundProduct.quantity - orderProduct.quantity,
+      };
+    });
+
+    await this.productsRepository.updateQuantity(orderedProductsQuantity);
+
+    return order;
   }
 }
 
