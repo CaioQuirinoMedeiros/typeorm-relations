@@ -16,8 +16,12 @@ class OrdersProducts {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
+  @ManyToOne(() => Order, order => order.order_products)
+  @JoinColumn({ name: 'order_id' })
   order: Order;
 
+  @ManyToOne(() => Product, product => product.order_products)
+  @JoinColumn({ name: 'product_id' })
   product: Product;
 
   @Column('uuid')
@@ -26,7 +30,7 @@ class OrdersProducts {
   @Column('uuid')
   order_id: string;
 
-  @Column('decimal', { precision: 2 })
+  @Column('decimal', { precision: 10, scale: 2 })
   price: number;
 
   @Column('int')
