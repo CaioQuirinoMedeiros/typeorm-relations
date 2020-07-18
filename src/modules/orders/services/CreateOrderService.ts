@@ -26,6 +26,22 @@ class CreateOrderService {
   ) {}
 
   public async execute({ customer_id, products }: IRequest): Promise<Order> {
+    const customer = await this.customersRepository.findById(customer_id);
+
+    if (!customer) {
+      throw new AppError('Customer not found');
+    }
+
+    const products2 = await this.productsRepository.findAllById(
+      products.map(product => ({ id: product.id })),
+    );
+
+    await this.productsRepository.
+
+    await this.ordersRepository.create({
+      customer,
+      products,
+    });
     // TODO
   }
 }
